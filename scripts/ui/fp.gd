@@ -8,11 +8,11 @@ enum Station { COUNTER, GREENHOUSE }
 
 # planters: [bench, slot, x, base_y]
 const POTS := [
-	[0, 0, 86, 150], [0, 1, 176, 150], [1, 0, 300, 150],
-	[1, 1, 86, 214], [2, 0, 196, 214], [2, 1, 322, 214],
+	[0, 0, 50, 240, 2.0], [0, 1, 96, 224, 1.7], [1, 0, 146, 208, 1.5],
+	[1, 1, 336, 208, 1.5], [2, 0, 386, 224, 1.7], [2, 1, 432, 240, 2.0],
 ]
-const DOOR := Rect2(300, 34, 134, 156)
-const LAMP_X := [86, 196, 322]
+const DOOR := Rect2(248, 92, 118, 88)
+const BELL := Rect2(203, 194, 48, 34)
 
 var station: Station = Station.COUNTER
 var _counter: Node2D
@@ -25,6 +25,7 @@ var _end_label: Label
 var _nav_label: Label
 var _toast: Label
 var _bubble: Label
+var _bubble_plate: ColorRect
 var _bubble_panel: Panel
 
 
@@ -41,6 +42,9 @@ func _ready() -> void:
 	if args.has("--smoke"):
 		call_deferred("_smoke")
 	for a in args:
+		if a == "--clicktest":
+			_clicktest()
+			return
 		if a.begins_with("--shot="):
 			if args.has("--green"):
 				station = Station.GREENHOUSE
@@ -53,9 +57,10 @@ func _ready() -> void:
 
 
 func _tex(name: String) -> Texture2D:
-	var path := SPR + name + ".png"
-	if ResourceLoader.exists(path):
-		return load(path)
+	const GEN := "res://assets/gen/"
+	for path in [GEN + name + ".png", SPR + name + ".png"]:
+		if ResourceLoader.exists(path):
+			return load(path)
 	return null
 
 
@@ -73,14 +78,10 @@ func _build_counter() -> void:
 	_counter.name = "Counter"
 	add_child(_counter)
 	var bg := Sprite2D.new()
-	bg.texture = _tex("bg_counter")
+	bg.texture = load("res://assets/gen/bg_counter.png")
 	bg.centered = false
 	bg.position = Vector2.ZERO
 	_counter.add_child(bg)
-	_sprite(_counter, "till", Vector2(52, 190), 2)
-	_sprite(_counter, "ledger", Vector2(150, 198), 2)
-	_sprite(_counter, "bell", Vector2(258, 194), 2)
-	_sprite(_counter, "can", Vector2(400, 196), 2)
 	_counter.visible = false
 
 
@@ -89,23 +90,18 @@ func _build_greenhouse() -> void:
 	_green.name = "Greenhouse"
 	add_child(_green)
 	var bg := Sprite2D.new()
-	bg.texture = _tex("bg_greenhouse")
+	bg.texture = load("res://assets/gen/bg_greenhouse.png")
 	bg.centered = false
 	bg.position = Vector2.ZERO
 	_green.add_child(bg)
 	for i in range(POTS.size()):
 		var pot: Array = POTS[i]
-		var bench := int(pot[0])
 		var bx := float(pot[2])
 		var by := float(pot[3])
-		_sprite(_green, "shadow", Vector2(bx, by + 2), 1)
-		var pot_sprite := _sprite(_green, "pot_big", Vector2(bx, by - 16), 3)
-		_pot_sprites[i] = pot_sprite
-		var plant_sprite := _sprite(_green, "plant_lumen_moss_0", Vector2(bx, by - 40), 4)
+		var sc := float(pot[4])
+		var plant_sprite := _sprite(_green, "plant_lumen_moss", Vector2(bx, by - 20.0 * sc), 4)
+		plant_sprite.scale = Vector2(sc, sc)
 		_plant_sprites[i] = plant_sprite
-	for b in range(3):
-		var lamp := _sprite(_green, "lamp_big", Vector2(float(LAMP_X[b]), 104.0), 5)
-		_lamp_sprites[b] = lamp
 	_green.visible = false
 
 
@@ -117,6 +113,7 @@ func _build_hud() -> void:
 	if font.load_bitmap_font(FONT) != OK:
 		push_warning("hud font failed")
 	var plate := ColorRect.new()
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plate.color = Color(0.043, 0.059, 0.102, 0.94)
 	plate.position = Vector2(0, 248)
 	plate.size = Vector2(480, 22)
@@ -138,6 +135,15 @@ func _build_hud() -> void:
 	_bubble_panel.size = Vector2(464, 44)
 	_bubble_panel.visible = false
 	layer.add_child(_bubble_panel)
+	var plate_bg := ColorRect.new()
+	plate_bg.name = "BubblePlate"
+	plate_bg.position = Vector2(8, 6)
+	plate_bg.size = Vector2(464, 44)
+	plate_bg.color = Color(0.03, 0.05, 0.08, 0.78)
+	plate_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate_bg.visible = false
+	_bubble_panel.add_child(plate_bg)
+	_bubble_plate = plate_bg
 	_bubble = Label.new()
 	_bubble.add_theme_font_override("font", font)
 	_bubble.add_theme_font_size_override("font_size", 5)
@@ -145,6 +151,8 @@ func _build_hud() -> void:
 	_bubble.position = Vector2(13, 10)
 	_bubble.size = Vector2(452, 36)
 	_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bubble_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_bubble)
 	# END DAY + navigation buttons (drawn as labels, hit-tested in _click)
 	_end_label = Label.new()
@@ -166,7 +174,7 @@ func _show_station() -> void:
 	_counter.visible = station == Station.COUNTER
 	_green.visible = station == Station.GREENHOUSE
 	if _nav_label != null:
-		_nav_label.text = "GREENHOUSE >" if station == Station.COUNTER else "< COUNTER"
+		_nav_label.text = "GREENHOUSE" if station == Station.COUNTER else "COUNTER"
 	_refresh()
 
 
@@ -180,16 +188,26 @@ func _refresh() -> void:
 			ps.visible = false
 		else:
 			ps.visible = true
-			ps.texture = _tex("plant_%s_%d" % [plant.def.id, plant.stage])
+			ps.texture = _tex("plant_%s" % plant.def.id)
+			var st: int = clampi(int(plant.stage), 0, 3)
+			var depth := float(POTS[i][4])
+			var grow: float = [0.45, 0.62, 0.82, 1.0][st] * depth
+			ps.scale = Vector2(grow, grow)
+			ps.position = Vector2(float(POTS[i][2]), float(POTS[i][3]) - 32.0 * grow)
 			ps.self_modulate = Color(0.72, 0.78, 0.82) if plant.wilted else Color.WHITE
 	for b in range(3):
-		var lamp: Sprite2D = _lamp_sprites[b]
-		lamp.self_modulate = Color.WHITE if bool(GameState.benches[b]["lamp"]) else Color(0.45, 0.5, 0.55)
+		if _lamp_sprites.size() > b:
+			var lamp: Sprite2D = _lamp_sprites[b]
+			lamp.self_modulate = Color.WHITE if bool(GameState.benches[b]["lamp"]) else Color(0.45, 0.5, 0.55)
 	var c = GameState.current
 	if c == null:
 		_bubble_panel.visible = false
+		if _bubble_plate != null:
+			_bubble_plate.visible = false
 	else:
 		_bubble_panel.visible = true
+		if _bubble_plate != null:
+			_bubble_plate.visible = true
 		_bubble.text = "%s WANTS %s\nBRINGS %d CR + %s\nCLICK HERE TO SERVE" % [
 			c.display_name.to_upper(), c.wants_text().to_upper().replace(" X", "X"),
 			c.cash_offer, c.brings_text().to_upper().replace(" X", "X")]
@@ -197,9 +215,9 @@ func _refresh() -> void:
 		GameState.day, GameState.cash, GameState.rating, GameState.visitors_left]
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_click(event.position)
+		_click(get_viewport().get_mouse_position())
 	elif event is InputEventKey and event.pressed:
 		match event.keycode:
 			KEY_SPACE: _end_day()
@@ -209,6 +227,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_C: _goto(Station.COUNTER)
 			KEY_S: GameState.save_game()
 			KEY_L: GameState.load_game()
+			KEY_1: _toggle_lamp(0)
+			KEY_2: _toggle_lamp(1)
+			KEY_3: _toggle_lamp(2)
 
 
 func _goto(s: Station) -> void:
@@ -226,7 +247,7 @@ func _click(p: Vector2) -> void:
 	if station == Station.COUNTER:
 		if DOOR.has_point(p):
 			_goto(Station.GREENHOUSE)
-		elif Rect2(244, 182, 32, 24).has_point(p):
+		elif BELL.has_point(p):
 			_next_visitor()
 		elif _bubble_panel.visible and Rect2(8, 6, 464, 44).has_point(p):
 			_serve()
@@ -234,17 +255,16 @@ func _click(p: Vector2) -> void:
 		for i in range(POTS.size()):
 			var bx := float(POTS[i][2])
 			var by := float(POTS[i][3])
-			if Rect2(bx - 16.0, by - 82.0, 32.0, 44.0).has_point(p):
+			var sc := float(POTS[i][4])
+			if Rect2(bx - 16.0 * sc, by - 42.0 * sc, 32.0 * sc, 44.0 * sc).has_point(p):
 				_pick(i, true)
 				return
-			if Rect2(bx - 28.0, by - 34.0, 56.0, 36.0).has_point(p):
-				_pick(i, false)
-				return
-		for b in range(3):
-			if Rect2(float(LAMP_X[b]) - 7.0, 88.0, 14.0, 16.0).has_point(p):
-				GameState.toggle_lamp(b)
-				_toast.text = "LAMP %d %s" % [b + 1, "ON" if bool(GameState.benches[b]["lamp"]) else "OFF"]
-				return
+
+
+
+func _toggle_lamp(b: int) -> void:
+	GameState.toggle_lamp(b)
+	_toast.text = "LAMP %d %s" % [b + 1, "ON" if bool(GameState.benches[b]["lamp"]) else "OFF"]
 
 
 func _pick(index: int, harvest_first: bool) -> void:
@@ -316,3 +336,41 @@ func _shoot(path: String) -> void:
 	img.save_png(path)
 	print("shot -> ", path)
 	get_tree().quit(0)
+
+
+func _clicktest() -> void:
+	await get_tree().process_frame
+	var before: int = GameState.day
+	var k: float = float(get_window().size.x) / 480.0
+	var target := Vector2(442.0, 259.0) * k
+	DisplayServer.warp_mouse(Vector2i(target))
+	await get_tree().process_frame
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = target
+	Input.parse_input_event(ev)
+	await get_tree().create_timer(0.2).timeout
+	print("CLICK scale=%.1f mouse=%s day %d -> %d" % [k, str(get_viewport().get_mouse_position()), before, GameState.day])
+	var day_ok := GameState.day > before
+	# walk to the greenhouse and water the first planter
+	DisplayServer.warp_mouse(Vector2i(Vector2(300.0, 130.0) * k))
+	await get_tree().process_frame
+	var ev2 := InputEventMouseButton.new()
+	ev2.button_index = MOUSE_BUTTON_LEFT
+	ev2.pressed = true
+	Input.parse_input_event(ev2)
+	await get_tree().create_timer(0.2).timeout
+	var in_green := station == Station.GREENHOUSE
+	var w_before: float = float(GameState.benches[0]["water"])
+	DisplayServer.warp_mouse(Vector2i(Vector2(float(POTS[0][2]), float(POTS[0][3])) * k))
+	await get_tree().process_frame
+	var ev3 := InputEventMouseButton.new()
+	ev3.button_index = MOUSE_BUTTON_LEFT
+	ev3.pressed = true
+	Input.parse_input_event(ev3)
+	await get_tree().create_timer(0.2).timeout
+	var w_after: float = float(GameState.benches[0]["water"])
+	print("CLICK nav=%s water %.2f -> %.2f" % [str(in_green), w_before, w_after])
+	print("CLICK: " + ("PASS" if day_ok and in_green and w_after > w_before else "FAIL"))
+	get_tree().quit()
