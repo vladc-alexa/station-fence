@@ -52,3 +52,8 @@ Tuned with `balance_sim.gd`, not by feel. If you change a number in `data/`, re-
 ## Next
 
 M1 = grow loop polish (seeds, repotting, plant stress readout). See `docs/implementation-plan.md`.
+
+
+## Art
+
+See `docs/style-bible.md`; regenerate with `python3 tools/make_palette.py`.
