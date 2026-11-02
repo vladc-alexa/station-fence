@@ -21,3 +21,7 @@ __pycache__/
 steam_appid.txt
 *.vdf
 .env
+
+# IDE
+.idea/
+*.iml
