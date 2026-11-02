@@ -12,7 +12,7 @@ static func decay(value: float, amount: float = 0.5) -> float:
 	return clamp_rating(value - amount)
 
 static func visitors_for(rating: float) -> int:
-	return clampi(4 + int(floor(rating / 10.0)), 4, 8)
+	return clampi(2 + (1 if rating >= 30.0 else 0), 2, 3)
 
 static func tier_unlocked(rating: float, tier: int) -> bool:
 	if tier <= 1:

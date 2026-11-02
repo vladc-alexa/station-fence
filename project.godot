@@ -4,7 +4,7 @@ config_version=5
 [application]
 config/name="Greenhouse Shop (working title)"
 config/description="Greenhouse trading sim on a small moon - M0 simulation spine."
-run/main_scene="res://scenes/room.tscn"
+run/main_scene="res://scenes/fp.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 

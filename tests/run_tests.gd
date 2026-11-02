@@ -12,7 +12,6 @@ func _initialize() -> void:
 	_suite("growth under ideal conditions", _test_grow_ideal)
 	_suite("drought and wilting", _test_grow_drought)
 	_suite("plant persistence", _test_plant_roundtrip)
-	_suite("morning budget", _test_morning)
 	_suite("barter maths", _test_barter)
 	_suite("rating maths", _test_rating)
 	_suite("visitor scaling", _test_visitors)
@@ -45,10 +44,10 @@ func _test_scripts_load() -> void:
 		"res://scripts/core/game_rng.gd", "res://scripts/core/plant_def.gd",
 		"res://scripts/core/plant_db.gd", "res://scripts/core/goods_def.gd",
 		"res://scripts/core/goods_db.gd", "res://scripts/core/plant.gd",
-		"res://scripts/core/grow_sim.gd", "res://scripts/core/morning.gd",
+		"res://scripts/core/grow_sim.gd",
 		"res://scripts/core/rating.gd", "res://scripts/core/customer.gd",
 		"res://scripts/core/barter.gd", "res://scripts/core/day_cycle.gd", "res://scripts/autoload/game_state.gd",
-		"res://scripts/ui/shop_screen.gd",
+		"res://scripts/ui/fp.gd",
 	]:
 		var s = load(path)
 		_check(s != null and s.can_instantiate(), "failed to compile %s" % path)
@@ -98,16 +97,6 @@ func _test_plant_roundtrip() -> void:
 	_check(copy.dry_days == 1, "dry_days preserved")
 	_check(copy.stage == plant.stage, "stage preserved")
 
-func _test_morning() -> void:
-	var m := Morning.new()
-	_check(m.ticks_left == 6, "starts with 6 ticks")
-	for i in range(6):
-		_check(bool(m.spend("water")["ok"]), "tick %d should succeed" % i)
-	_check(not bool(m.spend("water")["ok"]), "7th action must be refused")
-	_check(m.spend("water")["reason"] == "budget_exhausted", "reason must be budget_exhausted")
-	m.reset()
-	_check(m.ticks_left == 6, "reset restores ticks")
-
 func _test_barter() -> void:
 	var c := Customer.new()
 	c.cash_offer = 30
@@ -127,7 +116,8 @@ func _test_rating() -> void:
 	var low := Rating.visitors_for(0.0)
 	var mid := Rating.visitors_for(48.0)
 	var high := Rating.visitors_for(100.0)
-	_check(low >= 3, "a fresh shop still gets a minimum trickle (%d)" % low)
+	_check(low >= 2, "a fresh shop still gets a minimum trickle (%d)" % low)
+	_check(high <= 3, "traffic stays small (%d)" % high)
 	_check(mid > low, "rating 48 brings more traffic than rating 0 (%d > %d)" % [mid, low])
 	_check(high >= mid and high <= 10, "traffic is monotonic and capped (%d)" % high)
 	_check(Rating.clamp_rating(140.0) == 100.0, "clamped at 100")
@@ -139,7 +129,7 @@ func _test_rating() -> void:
 func _test_visitors() -> void:
 	var cycle := DayCycle.new(7)
 	var low_visitors := cycle.begin_day(0.0)
-	_check(low_visitors >= 3, "low rating day still has traffic (%d)" % low_visitors)
+	_check(low_visitors >= 2, "low rating day still has traffic (%d)" % low_visitors)
 	cycle = DayCycle.new(7)
 	var high_visitors := cycle.begin_day(90.0)
 	_check(high_visitors > low_visitors, "reputation grows traffic (%d > %d)" % [high_visitors, low_visitors])

@@ -19,7 +19,6 @@ var seed_value: int = 0
 var cash: int = START_CASH
 var day: int = 1
 var rating: float = 0.0
-var morning: Morning = Morning.new()
 var benches: Array = []
 var goods: Dictionary = {}
 var rng: GameRNG = GameRNG.new(0)
@@ -55,7 +54,6 @@ func new_run(p_seed: int) -> void:
 				p.recompute_stage()
 				slots[s2] = p
 		benches.append({"lamp": false, "water": 1.0, "slots": slots})
-	morning = Morning.new()
 	visitors_left = cycle.begin_day(rating)
 	state_changed.emit()
 
@@ -68,22 +66,16 @@ func water_slot(bench_index: int, slot_index: int) -> Dictionary:
 		return {"ok": false, "reason": "run_over"}
 	if benches[bench_index]["slots"][slot_index] == null:
 		return {"ok": false, "reason": "empty_slot"}
-	var spend := morning.spend("water")
-	if not bool(spend["ok"]):
-		return spend
 	benches[bench_index]["water"] = minf(WATER_CAP, float(benches[bench_index]["water"]) + WATER_PER_ACTION)
 	state_changed.emit()
-	return {"ok": true, "water": benches[bench_index]["water"], "ticks_left": morning.ticks_left}
+	return {"ok": true, "water": benches[bench_index]["water"]}
 
 func toggle_lamp(bench_index: int) -> Dictionary:
 	if over:
 		return {"ok": false, "reason": "run_over"}
-	var spend := morning.spend("lamp")
-	if not bool(spend["ok"]):
-		return spend
 	benches[bench_index]["lamp"] = not bool(benches[bench_index]["lamp"])
 	state_changed.emit()
-	return {"ok": true, "lamp": benches[bench_index]["lamp"], "ticks_left": morning.ticks_left}
+	return {"ok": true, "lamp": benches[bench_index]["lamp"]}
 
 func harvest_slot(bench_index: int, slot_index: int) -> Dictionary:
 	var plant = benches[bench_index]["slots"][slot_index]
@@ -178,7 +170,6 @@ func end_day() -> Dictionary:
 	cash -= upkeep
 	day += 1
 	cycle.day = day
-	morning.reset()
 	visitors_left = cycle.begin_day(rating)
 	current = null
 	var summary := {"ok": true, "upkeep": upkeep, "cash": cash, "day": day,
@@ -198,8 +189,7 @@ func state_dict() -> Dictionary:
 			slots.append(null if s == null else s.to_dict())
 		bench_data.append({"lamp": b["lamp"], "water": b["water"], "slots": slots})
 	return {"version": 2, "seed": seed_value, "cash": cash, "day": day,
-		"rating": rating, "goods": goods, "benches": bench_data,
-		"ticks_left": morning.ticks_left}
+		"rating": rating, "goods": goods, "benches": bench_data}
 
 func restore(data: Dictionary) -> void:
 	seed_value = int(data.get("seed", 0))
@@ -209,8 +199,6 @@ func restore(data: Dictionary) -> void:
 	day = int(data.get("day", 1))
 	rating = float(data.get("rating", 0.0))
 	goods = data.get("goods", {})
-	morning = Morning.new()
-	morning.ticks_left = int(data.get("ticks_left", Morning.TICKS))
 	benches = []
 	for b in data.get("benches", []):
 		var slots: Array = []
