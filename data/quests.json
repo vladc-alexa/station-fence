@@ -1,0 +1,18 @@
+[
+  {
+    "id": "sick_mine",
+    "name": "The Sick Mine",
+    "hook_customer": "miner",
+    "requires_rating": 25.0,
+    "location": "mine",
+    "steps": [
+      "Deliver 3 fern_extract to the shaft",
+      "Return before day 20"
+    ],
+    "rewards": {
+      "cash": 250,
+      "rating": 8.0
+    },
+    "desc": "A miner says the crew is coughing crystals. They need fern extract."
+  }
+]

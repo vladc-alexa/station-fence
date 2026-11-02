@@ -1,0 +1,128 @@
+[
+  {
+    "id": "lumen_moss",
+    "name": "Lumen Moss",
+    "stage_days": [
+      1,
+      1,
+      1
+    ],
+    "water_per_day": 1.0,
+    "light_need": "low",
+    "temp_c": [
+      14,
+      26
+    ],
+    "yield_good": "glow_sap",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.25,
+    "value": 40,
+    "sprite": "res://art/plants/lumen_moss.png"
+  },
+  {
+    "id": "vine_bean",
+    "name": "Vine Bean",
+    "stage_days": [
+      1,
+      2,
+      1
+    ],
+    "water_per_day": 1.0,
+    "light_need": "mid",
+    "temp_c": [
+      16,
+      28
+    ],
+    "yield_good": "bean_pod",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.3,
+    "value": 25,
+    "sprite": "res://art/plants/vine_bean.png"
+  },
+  {
+    "id": "ember_pepper",
+    "name": "Ember Pepper",
+    "stage_days": [
+      1,
+      2,
+      2
+    ],
+    "water_per_day": 1.0,
+    "light_need": "high",
+    "temp_c": [
+      20,
+      32
+    ],
+    "yield_good": "ember_pepper",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.35,
+    "value": 55,
+    "sprite": "res://art/plants/ember_pepper.png"
+  },
+  {
+    "id": "dew_fern",
+    "name": "Dew Fern",
+    "stage_days": [
+      1,
+      1,
+      2
+    ],
+    "water_per_day": 1.2,
+    "light_need": "low",
+    "temp_c": [
+      12,
+      24
+    ],
+    "yield_good": "fern_extract",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.2,
+    "value": 70,
+    "sprite": "res://art/plants/dew_fern.png"
+  },
+  {
+    "id": "crystal_orchid",
+    "name": "Crystal Orchid",
+    "stage_days": [
+      2,
+      2,
+      2
+    ],
+    "water_per_day": 1.0,
+    "light_need": "high",
+    "temp_c": [
+      18,
+      30
+    ],
+    "yield_good": "orchid_bloom",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.5,
+    "value": 160,
+    "sprite": "res://art/plants/crystal_orchid.png"
+  },
+  {
+    "id": "brine_kelp",
+    "name": "Brine Kelp",
+    "stage_days": [
+      1,
+      1,
+      1
+    ],
+    "water_per_day": 1.2,
+    "light_need": "low",
+    "temp_c": [
+      10,
+      22
+    ],
+    "yield_good": "kelp_syrup",
+    "yield_min": 4,
+    "yield_max": 6,
+    "wilt_penalty": 0.25,
+    "value": 30,
+    "sprite": "res://art/plants/brine_kelp.png"
+  }
+]

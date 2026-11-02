@@ -1,0 +1,77 @@
+[
+  {
+    "id": "miner",
+    "name": "Miner",
+    "tier": 1,
+    "cash": [
+      15,
+      40
+    ],
+    "wants": [
+      "bean_pod",
+      "kelp_syrup",
+      "glow_sap"
+    ],
+    "brings": [
+      "mineral_chunk",
+      "scrap_metal"
+    ],
+    "quip": "Dust in my lungs, sap in my veins."
+  },
+  {
+    "id": "angry",
+    "name": "Furious Trader",
+    "tier": 1,
+    "cash": [
+      15,
+      45
+    ],
+    "wants": [
+      "bean_pod",
+      "kelp_syrup",
+      "ember_pepper"
+    ],
+    "brings": [
+      "scrap_metal",
+      "mineral_chunk"
+    ],
+    "quip": "Everything here is overpriced."
+  },
+  {
+    "id": "lazy",
+    "name": "Old Hauler",
+    "tier": 1,
+    "cash": [
+      8,
+      30
+    ],
+    "wants": [
+      "bean_pod",
+      "glow_sap"
+    ],
+    "brings": [
+      "scrap_metal",
+      "seedling_tray"
+    ],
+    "quip": "Used to fly. Now I mostly sit."
+  },
+  {
+    "id": "patron",
+    "name": "Greenhouse Patron",
+    "tier": 2,
+    "cash": [
+      60,
+      140
+    ],
+    "wants": [
+      "orchid_bloom",
+      "fern_extract",
+      "ember_pepper"
+    ],
+    "brings": [
+      "seedling_tray",
+      "med_syringe"
+    ],
+    "quip": "I collect what survives out here."
+  }
+]

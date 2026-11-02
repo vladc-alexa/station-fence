@@ -1,0 +1,86 @@
+[
+  {
+    "id": "glow_sap",
+    "name": "Glow Sap",
+    "category": "produce",
+    "base_value": 18,
+    "stack": 20
+  },
+  {
+    "id": "bean_pod",
+    "name": "Bean Pod",
+    "category": "food",
+    "base_value": 7,
+    "stack": 40
+  },
+  {
+    "id": "ember_pepper",
+    "name": "Ember Pepper",
+    "category": "food",
+    "base_value": 26,
+    "stack": 30
+  },
+  {
+    "id": "fern_extract",
+    "name": "Fern Extract",
+    "category": "medicine",
+    "base_value": 58,
+    "stack": 10
+  },
+  {
+    "id": "orchid_bloom",
+    "name": "Orchid Bloom",
+    "category": "luxury",
+    "base_value": 140,
+    "stack": 5
+  },
+  {
+    "id": "kelp_syrup",
+    "name": "Kelp Syrup",
+    "category": "food",
+    "base_value": 22,
+    "stack": 20
+  },
+  {
+    "id": "mineral_chunk",
+    "name": "Mineral Chunk",
+    "category": "raw",
+    "base_value": 12,
+    "stack": 30
+  },
+  {
+    "id": "scrap_metal",
+    "name": "Scrap Metal",
+    "category": "raw",
+    "base_value": 6,
+    "stack": 40
+  },
+  {
+    "id": "seedling_tray",
+    "name": "Seedling Tray",
+    "category": "supply",
+    "base_value": 48,
+    "stack": 8
+  },
+  {
+    "id": "ration_pack",
+    "name": "Ration Pack",
+    "category": "food",
+    "base_value": 16,
+    "stack": 20
+  },
+  {
+    "id": "med_syringe",
+    "name": "Med Syringe",
+    "category": "medicine",
+    "base_value": 52,
+    "stack": 10
+  },
+  {
+    "id": "water_canister",
+    "name": "Water Canister",
+    "category": "supply",
+    "base_value": 14,
+    "stack": 12
+  }
+]
