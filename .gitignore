@@ -1,0 +1,23 @@
+# Godot
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+build/
+*.pck
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Python tooling
+__pycache__/
+.venv/
+
+# Local secrets / Steam
+steam_appid.txt
+*.vdf
+.env
