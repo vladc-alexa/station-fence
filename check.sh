@@ -5,6 +5,9 @@ cd "$(dirname "$0")"
 GODOT="${GODOT:-godot}"
 fail=0
 
+# First run on a fresh clone: build the class cache/imports before --script works.
+"$GODOT" --headless --path . --import >/dev/null 2>&1 || true
+
 echo "== unit tests =="
 "$GODOT" --headless --path . --script res://tests/run_tests.gd 2>&1 | tee /tmp/station-fence-tests.log | tail -20
 grep -q "RESULT: PASS" /tmp/station-fence-tests.log || fail=1
