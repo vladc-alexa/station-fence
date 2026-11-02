@@ -1,146 +1,169 @@
 extends Control
-## Barebones counter UI, built in code so the scene file stays trivial.
+## Debug-but-playable shop screen: greenhouse benches on the left, counter on the right.
 
 var _hud: Label
-var _offer: Label
+var _bench_box: VBoxContainer
+var _customer_label: Label
 var _log: RichTextLabel
-var _shelf: ItemList
-var _buttons: HBoxContainer
+var _slot_rows: Array = []	  # [{ "label": Label, "bench": int, "slot": int }]
+var _lamp_buttons: Array = []
 
 func _ready() -> void:
 	_build()
 	GameState.state_changed.connect(_refresh)
 	GameState.log_line.connect(_on_log)
-	GameState.run_over.connect(_on_game_over)
-	_on_log("Shift starts. Rent is due at closing.")
+	GameState.run_over.connect(_on_run_over)
 	_refresh()
 	if OS.get_cmdline_user_args().has("--smoke"):
 		call_deferred("_smoke")
 
 func _build() -> void:
 	var root := VBoxContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 10)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 8)
 	add_child(root)
 
 	_hud = Label.new()
-	_hud.add_theme_font_size_override("font_size", 22)
 	root.add_child(_hud)
 
-	_offer = Label.new()
-	_offer.add_theme_font_size_override("font_size", 18)
-	root.add_child(_offer)
+	var columns := HBoxContainer.new()
+	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", 16)
+	root.add_child(columns)
 
-	var split := HBoxContainer.new()
-	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(split)
+	var bench_panel := VBoxContainer.new()
+	bench_panel.custom_minimum_size = Vector2(560, 0)
+	columns.add_child(bench_panel)
+	var bench_title := Label.new()
+	bench_title.text = "GREENHOUSE"
+	bench_panel.add_child(bench_title)
+	_bench_box = VBoxContainer.new()
+	bench_panel.add_child(_bench_box)
 
-	_shelf = ItemList.new()
-	_shelf.custom_minimum_size = Vector2(420, 0)
-	_shelf.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	split.add_child(_shelf)
+	for b in range(GameState.BENCH_COUNT):
+		var bench_label := Label.new()
+		_bench_box.add_child(bench_label)
+		var lamp_button := Button.new()
+		lamp_button.text = "Toggle lamp"
+		var bi := b
+		lamp_button.pressed.connect(func() -> void: GameState.toggle_lamp(bi))
+		_bench_box.add_child(lamp_button)
+		_lamp_buttons.append(bench_label)
+		for s in range(GameState.SLOT_COUNT):
+			var row := HBoxContainer.new()
+			var plant_label := Label.new()
+			plant_label.custom_minimum_size = Vector2(320, 0)
+			row.add_child(plant_label)
+			var water_button := Button.new()
+			water_button.text = "Water"
+			var bb := b
+			var ss := s
+			water_button.pressed.connect(func() -> void: GameState.water_slot(bb, ss))
+			row.add_child(water_button)
+			var harvest_button := Button.new()
+			harvest_button.text = "Harvest"
+			harvest_button.pressed.connect(func() -> void: GameState.harvest_slot(bb, ss))
+			row.add_child(harvest_button)
+			_bench_box.add_child(row)
+			_slot_rows.append({"label": plant_label, "bench": b, "slot": s})
+
+	var shop_panel := VBoxContainer.new()
+	shop_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shop_panel.add_theme_constant_override("separation", 8)
+	columns.add_child(shop_panel)
+
+	_customer_label = Label.new()
+	_customer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_customer_label.custom_minimum_size = Vector2(0, 140)
+	shop_panel.add_child(_customer_label)
+
+	var next_button := Button.new()
+	next_button.text = "Next visitor"
+	next_button.pressed.connect(_on_next)
+	shop_panel.add_child(next_button)
+
+	var trade_button := Button.new()
+	trade_button.text = "Trade (offer what they want)"
+	trade_button.pressed.connect(_on_trade)
+	shop_panel.add_child(trade_button)
+
+	var day_button := Button.new()
+	day_button.text = "End day"
+	day_button.pressed.connect(_on_end_day)
+	shop_panel.add_child(day_button)
+
+	var save_button := Button.new()
+	save_button.text = "Save"
+	save_button.pressed.connect(_on_save)
+	shop_panel.add_child(save_button)
+
+	var load_button := Button.new()
+	load_button.text = "Load"
+	load_button.pressed.connect(_on_load)
+	shop_panel.add_child(load_button)
 
 	_log = RichTextLabel.new()
-	_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_log.custom_minimum_size = Vector2(0, 200)
 	_log.scroll_following = true
-	split.add_child(_log)
-
-	_buttons = HBoxContainer.new()
-	root.add_child(_buttons)
-	_add_button("Next customer", _on_next)
-	_add_button("Appraise", _on_appraise)
-	_add_button("Buy at ask", _on_buy_ask)
-	_add_button("Lowball -20%", _on_buy_lowball)
-	_add_button("Sell selected", _on_sell)
-	_add_button("End day", _on_end_day)
-	_add_button("Save", _on_save)
-	_add_button("Load", _on_load)
-
-func _add_button(text: String, cb: Callable) -> void:
-	var b := Button.new()
-	b.text = text
-	b.pressed.connect(cb)
-	_buttons.add_child(b)
+	root.add_child(_log)
 
 func _refresh() -> void:
-	_hud.text = "Day %d   Cash %d   Rep %d   Heat %.0f   Skill %d" % [
-		GameState.day, GameState.cash, GameState.reputation, GameState.heat, GameState.inspection_skill
-	]
-	var c = GameState.current
-	if c == null:
-		_offer.text = "Counter empty. Press 'Next customer'."
-	else:
-		var line := "%s (%s)" % [c.display_name, _arch_name(c.archetype)]
-		if c.offer_item != null:
-			line += " wants to sell: %s, condition %d%%, asking %d" % [
-				c.offer_item.def.name, int(c.offer_item.condition * 100.0), c.asking_price()
-			]
-		else:
-			line += " is looking for %s (budget %d)" % [c.wants_category, c.budget]
-		_offer.text = line
-	_shelf.clear()
-	for i in range(GameState.inventory.size()):
-		var item = GameState.inventory[i]
-		var tag := "  [CONTRABAND]" if not item.def.legal else ""
-		_shelf.add_item("%s  ~%dc  cond %d%%%s" % [
-			item.def.name, item.true_value, int(item.condition * 100.0), tag
-		])
+	_hud.text = "Day %d   Cash %d   Rating %.1f (visitors %d)   Morning ticks %d" % [
+		GameState.day, GameState.cash, GameState.rating,
+		GameState.visitors_left, GameState.morning.ticks_left]
 
-func _arch_name(a: int) -> String:
-	match a:
-		Customer.Archetype.DESPERATE:
-			return "desperate"
-		Customer.Archetype.COLLECTOR:
-			return "collector"
-		Customer.Archetype.UNDERCOVER:
-			return "???"
-	return "walker"
+	for row in _slot_rows:
+		var b: int = row["bench"]
+		var s: int = row["slot"]
+		var plant = GameState.benches[b]["slots"][s]
+		var label: Label = row["label"]
+		if plant == null:
+			label.text = "  slot %d: (empty)" % s
+		else:
+			label.text = "  %s — stage %d/3  growth %.1f/%.1f%s" % [
+				plant.def.display_name, plant.stage, plant.progress,
+				plant.def.total_days(), "  WILTED" if plant.wilted else ""]
+
+	for bi in range(_lamp_buttons.size()):
+		var label: Label = _lamp_buttons[bi]
+		var lamp_on := bool(GameState.benches[bi]["lamp"])
+		label.text = "Bench %d  [%s]  water %.1f" % [bi + 1, "lamp ON" if lamp_on else "lamp off", float(GameState.benches[bi]["water"])]
+
+	if GameState.current == null:
+		_customer_label.text = "Counter: nobody here.\n\nStock: %s" % _stock_text()
+	else:
+		var c := GameState.current
+		_customer_label.text = "%s (tier %d) says: %s\nWants: %s\nBrings: %s + %d cash\nAccept threshold: %d value\n\nStock: %s" % [
+			c.display_name, c.tier, c.quip, c.wants_text(), c.brings_text(),
+			c.cash_offer, Barter.threshold(c), _stock_text()]
+
+func _stock_text() -> String:
+	if GameState.goods.is_empty():
+		return "nothing"
+	var parts: Array = []
+	for id in GameState.goods.keys():
+		parts.append("%s x%d" % [str(id), int(GameState.goods[id])])
+	return ", ".join(parts)
 
 func _on_next() -> void:
 	GameState.next_customer()
 	_refresh()
 
-func _on_appraise() -> void:
-	var c = GameState.current
-	if c == null or c.offer_item == null:
-		_on_log("Nothing to appraise.")
+func _on_trade() -> void:
+	if GameState.current == null:
+		_on_log("Nobody at the counter.")
 		return
-	var est: Dictionary = c.offer_item.estimate(GameState.inspection_skill, GameState.cycle.rng)
-	var text := "Appraisal: %d-%d credits" % [int(est["low"]), int(est["high"])]
-	if est["exact"]:
-		text = "Appraisal: exactly %d credits" % int(est["low"])
-	_on_log(text)
-
-func _on_buy_ask() -> void:
-	var c = GameState.current
-	if c == null or c.offer_item == null:
-		_on_log("They are not selling anything.")
-		return
-	GameState.buy_offer(c.asking_price())
-	_refresh()
-
-func _on_buy_lowball() -> void:
-	var c = GameState.current
-	if c == null or c.offer_item == null:
-		_on_log("They are not selling anything.")
-		return
-	GameState.buy_offer(int(round(float(c.asking_price()) * 0.8)))
-	_refresh()
-
-func _on_sell() -> void:
-	var c = GameState.current
-	var picked := _shelf.get_selected_items()
-	if c == null or picked.is_empty():
-		_on_log("Pick a shelf item and have a customer at the counter.")
-		return
-	var idx := int(picked[0])
-	var item = GameState.inventory[idx]
-	GameState.sell_item(idx, c.perceived_value(item))
+	var offered := GameState.offer_for(GameState.current)
+	var res := GameState.trade(offered)
+	_on_log("Trade %s (offered %d, wanted %d)" % [
+		"accepted" if bool(res["ok"]) else "refused: %s" % str(res["reason"]),
+		int(res["offer_value"]), int(res["want_value"])])
 	_refresh()
 
 func _on_end_day() -> void:
-	GameState.end_day()
+	var summary := GameState.end_day()
+	if bool(summary.get("ok", false)):
+		_on_log("Upkeep paid: %d. Day %d." % [int(summary["upkeep"]), int(summary["day"])])
 	_refresh()
 
 func _on_save() -> void:
@@ -149,39 +172,53 @@ func _on_save() -> void:
 func _on_load() -> void:
 	_on_log("Loaded." if GameState.load_game() else "No save found.")
 
-## Headless integration smoke test: godot --headless --path . -- --smoke
-func _smoke() -> void:
-	var fails := 0
-	var deals := 0
-	var start_cash: int = GameState.cash
-	for i in range(48):
-		_on_next()
-		var c = GameState.current
-		if c == null:
-			continue
-		if c.offer_item != null:
-			_on_appraise()
-			_on_buy_ask()
-		elif not GameState.inventory.is_empty():
-			_shelf.select(0)
-			_on_sell()
-			deals += 1
-	if GameState.day != 1:
-		fails += 1
-	_on_end_day()
-	if GameState.day != 2:
-		fails += 1
-	if _hud.text.find("Day 2") == -1:
-		fails += 1
-	if GameState.cash == start_cash:
-		fails += 1
-	print("SMOKE hud=%s" % _hud.text)
-	print("SMOKE cash %d -> %d  deals=%d  inv=%d" % [start_cash, GameState.cash, deals, GameState.inventory.size()])
-	print("SMOKE: %s" % ("PASS" if fails == 0 else "FAIL(%d)" % fails))
-	get_tree().quit(0 if fails == 0 else 1)
+func _on_run_over(reason: String) -> void:
+	_on_log("RUN OVER: %s" % reason)
 
 func _on_log(text: String) -> void:
 	_log.append_text(text + "\n")
 
-func _on_game_over(reason: String) -> void:
-	_on_log("RUN OVER: " + reason)
+## Headless integration smoke: godot --headless --path . -- --smoke
+func _smoke() -> void:
+	var fails := 0
+	var start_day: int = GameState.day
+	var trades := 0
+	var harvests := 0
+	for d in range(10):
+		for row in _slot_rows:
+			GameState.water_slot(int(row["bench"]), int(row["slot"]))
+		for row in _slot_rows:
+			GameState.water_slot(int(row["bench"]), int(row["slot"]))
+		GameState.toggle_lamp(0)
+		for b in range(GameState.BENCH_COUNT):
+			for s in range(GameState.SLOT_COUNT):
+				if GameState.harvest_slot(b, s).get("ok", false):
+					harvests += 1
+		for i in range(12):
+			GameState.next_customer()
+			if GameState.current == null:
+				break
+			var res := GameState.trade(GameState.offer_for(GameState.current))
+			if bool(res.get("ok", false)):
+				trades += 1
+		GameState.end_day()
+	if GameState.day != start_day + 10:
+		fails += 1
+	if harvests <= 0:
+		fails += 1
+	if _hud.text.find("Day %d" % GameState.day) == -1:
+		fails += 1
+	print("SMOKE hud=%s" % _hud.text)
+	print("SMOKE trades=%d harvests=%d cash=%d rating=%.1f plants=%s" % [
+		trades, harvests, GameState.cash, GameState.rating, _plant_progress()])
+	print("SMOKE: %s" % ("PASS" if fails == 0 else "FAIL(%d)" % fails))
+	get_tree().quit(0 if fails == 0 else 1)
+
+func _plant_progress() -> String:
+	var parts: Array = []
+	for b in range(GameState.BENCH_COUNT):
+		for s in range(GameState.SLOT_COUNT):
+			var plant = GameState.benches[b]["slots"][s]
+			if plant != null:
+				parts.append("%s:%d" % [plant.def.id, plant.stage])
+	return ",".join(parts)

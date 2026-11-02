@@ -1,32 +1,31 @@
 extends SceneTree
-## Headless test runner (no addons):
-##   ~/tools/godot --headless --path . --script res://tests/run_tests.gd
+## Headless unit + integration suite: godot --headless --path . --script res://tests/run_tests.gd
 
-var checks := 0
 var failures := 0
+var checks := 0
 var _current := ""
 
 func _initialize() -> void:
 	_suite("scripts compile", _test_scripts_load)
-	_suite("item database", _test_item_db)
-	_suite("deterministic spawns", _test_determinism)
-	_suite("item rolling", _test_item_roll)
-	_suite("appraisal accuracy", _test_estimate)
-	_suite("buy negotiation", _test_buy)
-	_suite("sell negotiation", _test_sell)
-	_suite("contraband + heat", _test_heat)
-	_suite("undercover bust", _test_undercover)
-	_suite("day + rent", _test_day)
-	_suite("save/load roundtrip", _test_save)
-	_suite("economy over 10 days", _test_economy)
-
+	_suite("plant database", _test_plant_db)
+	_suite("goods database", _test_goods_db)
+	_suite("growth under ideal conditions", _test_grow_ideal)
+	_suite("drought and wilting", _test_grow_drought)
+	_suite("plant persistence", _test_plant_roundtrip)
+	_suite("morning budget", _test_morning)
+	_suite("barter maths", _test_barter)
+	_suite("rating maths", _test_rating)
+	_suite("visitor scaling", _test_visitors)
+	_suite("determinism (20 days)", _test_determinism)
+	_suite("save/load round trip", _test_save_roundtrip)
 	print("")
 	print("checks=%d failures=%d" % [checks, failures])
 	print("RESULT: %s" % ("PASS" if failures == 0 else "FAIL"))
 	quit(0 if failures == 0 else 1)
 
-func _suite(title: String, fn: Callable) -> void:
-	_current = title
+func _suite(name: String, fn: Callable) -> void:
+	_current = name
+	print("-- %s" % name)
 	fn.call()
 
 func _check(condition: bool, message: String) -> void:
@@ -35,209 +34,175 @@ func _check(condition: bool, message: String) -> void:
 		failures += 1
 		print("  FAIL [%s] %s" % [_current, message])
 
+func _gs(p_seed: int) -> Node:
+	var script: GDScript = load("res://scripts/autoload/game_state.gd")
+	var gs: Node = script.new()
+	gs.new_run(p_seed)
+	return gs
+
 func _test_scripts_load() -> void:
 	for path in [
-		"res://scripts/core/game_rng.gd", "res://scripts/core/item_def.gd",
-		"res://scripts/core/item_db.gd", "res://scripts/core/item_instance.gd",
-		"res://scripts/core/customer.gd", "res://scripts/core/deal.gd",
-		"res://scripts/core/day_cycle.gd", "res://scripts/core/save_game.gd",
-		"res://scripts/autoload/game_state.gd",
+		"res://scripts/core/game_rng.gd", "res://scripts/core/plant_def.gd",
+		"res://scripts/core/plant_db.gd", "res://scripts/core/goods_def.gd",
+		"res://scripts/core/goods_db.gd", "res://scripts/core/plant.gd",
+		"res://scripts/core/grow_sim.gd", "res://scripts/core/morning.gd",
+		"res://scripts/core/rating.gd", "res://scripts/core/customer.gd",
+		"res://scripts/core/barter.gd", "res://scripts/core/day_cycle.gd", "res://scripts/autoload/game_state.gd",
+		"res://scripts/ui/shop_screen.gd",
 	]:
 		var s = load(path)
 		_check(s != null and s.can_instantiate(), "failed to compile %s" % path)
 
-func _test_item_db() -> void:
-	var all := ItemDB.all()
-	_check(all.size() >= 8, "expected >=8 items, got %d" % all.size())
-	var pistol := ItemDB.get_def("scrubbed_pistol")
-	_check(pistol != null, "scrubbed_pistol missing")
-	if pistol != null:
-		_check(not pistol.legal, "pistol should be illegal")
-		_check(pistol.base_value == 340, "pistol base_value wrong")
+func _test_plant_db() -> void:
+	var all := PlantDB.all()
+	_check(all.size() == 6, "expected 6 plants, got %d" % all.size())
+	for def in all:
+		_check(def.is_valid(), "invalid plant def %s" % def.id)
+		_check(def.stage_days.size() == 3, "%s needs 3 stage entries" % def.id)
+	_check(PlantDB.get_def("crystal_orchid") != null, "crystal_orchid missing")
+	_check(PlantDB.get_def("nope") == null, "unknown plant should be null")
+
+func _test_goods_db() -> void:
+	_check(GoodsDB.all().size() >= 10, "expected >=10 goods")
+	_check(GoodsDB.value_of("orchid_bloom") == 140, "orchid_bloom value")
+	_check(GoodsDB.by_category("food").size() >= 3, "food category too small")
+	_check(GoodsDB.value_of("nope") == 0, "unknown good value should be 0")
+
+func _test_grow_ideal() -> void:
+	var plant := Plant.from_id("lumen_moss")
+	var env := {"lamp": false, "water": 2.0, "temp_c": 20.0}
+	for i in range(10):
+		GrowSim.tick(plant, env)
+	_check(plant.stage >= 2, "ideal 10 days should pass stage 2 (got %d)" % plant.stage)
+	_check(not plant.wilted, "well-watered plant should not wilt")
+	_check(plant.is_harvestable(), "10 ideal days should be harvestable")
+
+func _test_grow_drought() -> void:
+	var plant := Plant.from_id("vine_bean")
+	var dry := {"lamp": false, "water": 0.0, "temp_c": 20.0}
+	var before := 0.0
+	for i in range(3):
+		GrowSim.tick(plant, dry)
+	_check(plant.wilted, "3 dry days should wilt")
+	_check(plant.progress < plant.def.total_days(), "wilted plant must not progress to harvest")
+	_check(not Plant.from_id("vine_bean").is_harvestable(), "fresh plant not harvestable")
+
+func _test_plant_roundtrip() -> void:
+	var plant := Plant.from_id("dew_fern")
+	plant.progress = 4.2
+	plant.dry_days = 1
+	plant.recompute_stage()
+	var copy := Plant.from_dict(plant.to_dict())
+	_check(copy.def.id == plant.def.id, "id preserved")
+	_check(is_equal_approx(copy.progress, 4.2), "progress preserved")
+	_check(copy.dry_days == 1, "dry_days preserved")
+	_check(copy.stage == plant.stage, "stage preserved")
+
+func _test_morning() -> void:
+	var m := Morning.new()
+	_check(m.ticks_left == 6, "starts with 6 ticks")
+	for i in range(6):
+		_check(bool(m.spend("water")["ok"]), "tick %d should succeed" % i)
+	_check(not bool(m.spend("water")["ok"]), "7th action must be refused")
+	_check(m.spend("water")["reason"] == "budget_exhausted", "reason must be budget_exhausted")
+	m.reset()
+	_check(m.ticks_left == 6, "reset restores ticks")
+
+func _test_barter() -> void:
+	var c := Customer.new()
+	c.cash_offer = 30
+	c.wants = [{"id": "bean_pod", "qty": 2}]
+	c.brings = [{"id": "mineral_chunk", "qty": 1}]
+	var want := Barter.want_value(c)
+	_check(want == 14, "want value should be 14 (got %d)" % want)
+	var low := Barter.evaluate(c, {"scrap_metal": 1})
+	_check(not bool(low["ok"]), "cheap offer must be refused")
+	_check(low["reason"] == "too_low", "reason should be too_low")
+	var good := Barter.evaluate(c, {"bean_pod": 2})
+	_check(bool(good["ok"]), "exact offer must be accepted")
+	_check(int(good["cash_gain"]) == 30, "cash transferred")
+	_check(float(good["rating_delta"]) > 0.0, "accepted trade raises rating")
+
+func _test_rating() -> void:
+	var low := Rating.visitors_for(0.0)
+	var mid := Rating.visitors_for(48.0)
+	var high := Rating.visitors_for(100.0)
+	_check(low >= 3, "a fresh shop still gets a minimum trickle (%d)" % low)
+	_check(mid > low, "rating 48 brings more traffic than rating 0 (%d > %d)" % [mid, low])
+	_check(high >= mid and high <= 10, "traffic is monotonic and capped (%d)" % high)
+	_check(Rating.clamp_rating(140.0) == 100.0, "clamped at 100")
+	_check(Rating.decay(10.0) == 9.5, "decays 0.5 per day")
+	_check(Rating.decay(0.2) == 0.0, "never below zero")
+	_check(Rating.tier_unlocked(25.0, 2), "tier 2 unlocked at 25")
+	_check(not Rating.tier_unlocked(20.0, 2), "tier 2 locked at 20")
+
+func _test_visitors() -> void:
+	var cycle := DayCycle.new(7)
+	var low_visitors := cycle.begin_day(0.0)
+	_check(low_visitors >= 3, "low rating day still has traffic (%d)" % low_visitors)
+	cycle = DayCycle.new(7)
+	var high_visitors := cycle.begin_day(90.0)
+	_check(high_visitors > low_visitors, "reputation grows traffic (%d > %d)" % [high_visitors, low_visitors])
+	var low: Customer = DayCycle.new(3).spawn(0.0)
+	_check(low != null and low.tier == 1, "low rating spawns tier 1 only")
+	var high_cycle := DayCycle.new(3)
+	var saw_tier2 := false
+	for i in range(200):
+		var c := high_cycle.spawn(80.0)
+		if c != null and c.tier == 2:
+			saw_tier2 = true
+			break
+	_check(saw_tier2, "tier 2 customers appear once unlocked")
+
+func _run_scenario(p_seed: int) -> String:
+	var gs := _gs(p_seed)
+	for d in range(20):
+		for b in range(gs.BENCH_COUNT):
+			for s in range(gs.SLOT_COUNT):
+				gs.water_slot(b, s)
+		gs.toggle_lamp(0)
+		for b in range(gs.BENCH_COUNT):
+			for s in range(gs.SLOT_COUNT):
+				gs.harvest_slot(b, s)
+		for i in range(10):
+			gs.next_customer()
+			if gs.current == null:
+				break
+			gs.trade(gs.offer_for(gs.current))
+		gs.end_day()
+	var snapshot := JSON.stringify(gs.state_dict())
+	gs.free()
+	return snapshot
 
 func _test_determinism() -> void:
-	var a := DayCycle.new(4242)
-	var b := DayCycle.new(4242)
-	var state := {"cash": 500, "heat": 0.0, "day": 1, "roll_counter": 0}
-	for i in range(6):
-		var ca := a.spawn_customer(0.0, 0)
-		var cb := b.spawn_customer(0.0, 0)
-		_check(ca.display_name == cb.display_name, "name mismatch at %d" % i)
-		_check(ca.archetype == cb.archetype, "archetype mismatch at %d" % i)
-		_check(ca.budget == cb.budget, "budget mismatch at %d" % i)
-		if ca.offer_item != null and cb.offer_item != null:
-			_check(ca.offer_item.def.id == cb.offer_item.def.id, "offer id mismatch at %d" % i)
-			_check(ca.offer_item.true_value == cb.offer_item.true_value, "offer value mismatch at %d" % i)
-	_check(state["cash"] == 500, "state untouched")
+	var a := _run_scenario(424242)
+	var b := _run_scenario(424242)
+	_check(a == b, "same seed must produce identical 20-day state")
+	var c := _run_scenario(999)
+	_check(a != c, "different seed must diverge")
 
-func _test_item_roll() -> void:
-	var rng := GameRNG.new(7)
-	var def := ItemDB.get_def("drone_battery")
-	for i in range(40):
-		var item := ItemInstance.roll(def, rng)
-		_check(item.true_value > 0, "non-positive value")
-		_check(item.condition >= def.condition_min - 0.001, "condition below min")
-		_check(item.condition <= def.condition_max + 0.001, "condition above max")
-
-func _test_estimate() -> void:
-	var rng := GameRNG.new(11)
-	var def := ItemDB.get_def("scrubbed_pistol")
-	var item := ItemInstance.roll(def, rng)
-	var rough: Dictionary = item.estimate(0, rng)
-	_check(rough["low"] < rough["high"], "rough estimate should be a range")
-	_check(not rough["exact"], "skill 0 should not be exact on difficulty 3")
-	var precise: Dictionary = item.estimate(5, rng)
-	_check(precise["exact"], "high skill should be exact")
-	_check(precise["low"] <= item.true_value and item.true_value <= precise["high"], "value outside band")
-
-func _test_buy() -> void:
-	var rng := GameRNG.new(3)
-	var def := ItemDB.get_def("neon_sign")
-	var c := Customer.new()
-	c.archetype = Customer.Archetype.WALKER
-	c.offer_item = ItemInstance.roll(def, rng)
-	c.ask_ratio = 0.7
-	var state := {"cash": 500, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var low := Deal.buy_from_customer(state, c, c.offer_item, int(c.asking_price() * 0.5))
-	_check(not low["ok"], "lowball should be refused")
-	_check(low["reason"] == "lowball", "expected lowball reason, got %s" % low["reason"])
-	var fair := Deal.buy_from_customer(state, c, c.offer_item, c.asking_price())
-	_check(fair["ok"], "ask price should be accepted (%s)" % fair["reason"])
-	var broke := {"cash": 5, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var nocash := Deal.buy_from_customer(broke, c, c.offer_item, c.asking_price())
-	_check(not nocash["ok"] and nocash["reason"] == "no_cash", "should fail on cash")
-
-func _test_sell() -> void:
-	var rng := GameRNG.new(5)
-	var def := ItemDB.get_def("synth_whiskey")
-	var item := ItemInstance.roll(def, rng)
-	var c := Customer.new()
-	c.archetype = Customer.Archetype.WALKER
-	c.budget = 9999
-	var state := {"cash": 100, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var greedy := Deal.sell_to_customer(state, c, item, c.perceived_value(item) + 200)
-	_check(not greedy["ok"] and greedy["reason"] == "too_expensive", "overpriced sale should fail")
-	var ok := Deal.sell_to_customer(state, c, item, c.perceived_value(item))
-	_check(ok["ok"], "fair sale should pass (%s)" % ok["reason"])
-	_check(ok["heat"] == 0.0, "legal sale should not raise heat")
-
-func _test_heat() -> void:
-	var rng := GameRNG.new(9)
-	var def := ItemDB.get_def("fake_id_chip")
-	var item := ItemInstance.roll(def, rng)
-	var c := Customer.new()
-	c.archetype = Customer.Archetype.WALKER
-	c.budget = 99999
-	var state := {"cash": 100, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var res := Deal.sell_to_customer(state, c, item, c.perceived_value(item))
-	if res["ok"]:
-		_check(res["heat"] > 0.0, "contraband sale must raise heat")
-	else:
-		_check(res["reason"] == "undercover", "only undercover may block contraband (%s)" % res["reason"])
-
-func _test_undercover() -> void:
-	var rng := GameRNG.new(13)
-	var item := ItemInstance.roll(ItemDB.get_def("neon_sign"), rng)
-	var c := Customer.new()
-	c.archetype = Customer.Archetype.UNDERCOVER
-	c.offer_item = item
-	c.budget = 9999
-	var state := {"cash": 900, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var legal_buy := Deal.buy_from_customer(state, c, item, item.true_value)
-	_check(not legal_buy["seized"], "undercover won't seize legal goods")
-	var hot_item := ItemInstance.roll(ItemDB.get_def("scrubbed_pistol"), rng)
-	var buy := Deal.buy_from_customer(state, c, hot_item, hot_item.true_value)
-	_check(not buy["ok"] and buy["seized"], "undercover buy of contraband should seize")
-	c.offer_item = null
-	var sell := Deal.sell_to_customer(state, c, item, item.true_value)
-	_check(not sell["ok"] and sell["seized"], "undercover sale should seize")
-
-func _test_day() -> void:
-	var cycle := DayCycle.new(1)
-	cycle.begin_day()
-	for i in range(20):
-		cycle.advance_time(1)
-	_check(cycle.day_over(), "day should end after its length")
-	var summary := cycle.close_day(10000)
-	_check(summary["paid"], "cash 10000 should cover rent")
-	_check(summary["rent"] == DayCycle.rent_for_day(1), "rent formula mismatch")
-	_check(cycle.day == 2, "day should advance")
-	var poor := DayCycle.new(1)
-	var evicted := poor.close_day(0)
-	_check(evicted["game_over"], "no cash should mean eviction")
-
-func _test_save() -> void:
-	var rng := GameRNG.new(21)
-	var inv: Array = []
-	for i in range(3):
-		inv.append(ItemInstance.roll(ItemDB.get_def("drone_battery"), rng))
-	var state := {
-		"seed": 21, "day": 4, "cash": 812, "reputation": 3, "heat": 12.5,
-		"inspection_skill": 2, "inventory": inv,
-	}
-	var text := SaveGame.to_json(state)
-	var back := SaveGame.from_json(text)
-	_check(int(back["cash"]) == 812, "cash lost in save")
-	_check(int(back["day"]) == 4, "day lost in save")
-	_check(is_equal_approx(float(back["heat"]), 12.5), "heat lost in save")
-	_check(back["inventory"].size() == 3, "inventory size lost in save")
-	if back["inventory"].size() == 3:
-		_check(back["inventory"][0].def.id == inv[0].def.id, "item id lost in save")
-		_check(back["inventory"][0].true_value == inv[0].true_value, "item value lost in save")
-
-func _test_economy() -> void:
-	# A competent-player strategy: buy only under market, hold stock until a buyer
-	# pays at least 15% over cost, keep one day of rent in reserve.
-	var cycle := DayCycle.new(2026)
-	var state := {"cash": 500, "heat": 0.0, "day": 1, "roll_counter": 0}
-	var shelf: Array = []
-	var basis: Array = []
-	var spent := 0
-	var earned := 0
-	var skill := 2
-	for d in range(10):
-		cycle.begin_day()
-		var reserve := DayCycle.rent_for_day(cycle.day)
-		var guard := 0
-		while not cycle.day_over() and guard < 60:
-			guard += 1
-			cycle.advance_time(1)
-			var c: Customer = cycle.spawn_customer(float(state["heat"]), 0)
-			if c == null:
-				break
-			if c.offer_item != null:
-				var est: Dictionary = c.offer_item.estimate(skill, cycle.rng)
-				var ask := c.asking_price()
-				var cap: int = int(round(float(est["low"]) * 0.92))
-				if ask <= cap and int(state["cash"]) - ask >= reserve and shelf.size() < 12:
-					if Deal.buy_from_customer(state, c, c.offer_item, ask)["ok"]:
-						state["cash"] = int(state["cash"]) - ask
-						spent += ask
-						shelf.append(c.offer_item)
-						basis.append(ask)
-			elif not shelf.is_empty():
-				var best := -1
-				var best_price := 0
-				for i in range(shelf.size()):
-					var p: int = mini(c.perceived_value(shelf[i]), c.budget)
-					if p >= int(basis[i]) * 1.15 and p > best_price:
-						best = i
-						best_price = p
-				if best >= 0:
-					var item = shelf[best]
-					var res: Dictionary = Deal.sell_to_customer(state, c, item, best_price)
-					if res["ok"]:
-						state["cash"] = int(state["cash"]) + best_price
-						earned += best_price
-						shelf.remove_at(best)
-						basis.remove_at(best)
-					elif res.get("seized", false):
-						shelf.remove_at(best)
-						basis.remove_at(best)
-		state["cash"] = int(state["cash"]) - DayCycle.rent_for_day(cycle.day)
-		cycle.day += 1
-	print("  [economy] spent=%d earned=%d cash=%d stock=%d" % [spent, earned, int(state["cash"]), shelf.size()])
-	_check(earned > 0, "no sales completed at all")
-	_check(earned > spent, "gross sales (%d) must exceed stock cost (%d)" % [earned, spent])
-	_check(int(state["cash"]) > 0, "strategy must not go bankrupt (cash=%d)" % int(state["cash"]))
-
+func _test_save_roundtrip() -> void:
+	var gs := _gs(11)
+	for b in range(gs.BENCH_COUNT):
+		for s in range(gs.SLOT_COUNT):
+			gs.water_slot(b, s)
+	gs.next_customer()
+	gs.trade(gs.offer_for(gs.current))
+	var snapshot: Dictionary = gs.state_dict()
+	var other := _gs(0)
+	other.restore(snapshot)
+	_check(other.cash == gs.cash, "cash restored")
+	_check(other.day == gs.day, "day restored")
+	_check(is_equal_approx(other.rating, gs.rating), "rating restored")
+	_check(other.goods.keys().size() == gs.goods.keys().size(), "goods restored")
+	for b in range(gs.BENCH_COUNT):
+		for s in range(gs.SLOT_COUNT):
+			var p1 = gs.benches[b]["slots"][s]
+			var p2 = other.benches[b]["slots"][s]
+			if p1 == null:
+				_check(p2 == null, "empty slot restored as empty")
+			else:
+				_check(p2 != null and p2.def.id == p1.def.id, "plant id restored")
+				_check(p2 != null and p2.stage == p1.stage, "plant stage restored")
+	gs.free()
+	other.free()
